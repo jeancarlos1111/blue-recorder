@@ -1,2 +1,4 @@
 /target
 *.mo
+build_output/
+appimagetool-x86_64.AppImage
