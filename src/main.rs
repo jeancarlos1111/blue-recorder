@@ -41,23 +41,32 @@ pub fn build_ui(application: &Application) {
     let builder: Builder = Builder::from_string(ui_src.as_str());
 
     // Translate
-    let mut po_path_abs = {
-        let mut current_exec_dir = std::env::current_exe().unwrap();
-        current_exec_dir.pop();
-        current_exec_dir
-    }
-    .join(Path::new("po"));
+    let po_dir_env = std::env::var("PO_DIR").unwrap_or_else(|_| String::from("po"));
+    let mut po_path_abs = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("po");
 
     if !po_path_abs.exists() {
-        po_path_abs = std::fs::canonicalize(Path::new(
-            &std::env::var("PO_DIR").unwrap_or_else(|_| String::from("po")),
-        ))
-        .unwrap();
+        po_path_abs = std::fs::canonicalize(Path::new(&po_dir_env)).unwrap_or_else(|_| {
+            if Path::new("/usr/share/locale").exists() {
+                std::path::PathBuf::from("/usr/share/locale")
+            } else {
+                std::path::PathBuf::from(po_dir_env)
+            }
+        });
     }
 
     setlocale(LocaleCategory::LcAll, "");
-    bindtextdomain("blue-recorder", po_path_abs.to_str().unwrap()).unwrap();
-    textdomain("blue-recorder").unwrap();
+    if let Some(po_str) = po_path_abs.to_str() {
+        if let Err(e) = bindtextdomain("blue-recorder", po_str) {
+            eprintln!("Warning: failed to bindtextdomain: {}", e);
+        }
+    }
+    if let Err(e) = textdomain("blue-recorder") {
+        eprintln!("Warning: failed to set textdomain: {}", e);
+    }
 
     // Config initialize
     config_management::initialize();
@@ -482,7 +491,6 @@ pub fn build_ui(application: &Application) {
         video_process: None,
         audio_process: None,
         saved_filename: None,
-        unbound: None,
         window: main_window.clone(),
         record_delay: delay_spin,
         record_wayland: wayland_record,
@@ -513,27 +521,35 @@ pub fn build_ui(application: &Application) {
                 _record_button.clone(),
             );
         } else if _delay_spin.value() as u64 == 0 {
-            let _area_capture = area_capture.borrow_mut();
-            match _ffmpeg_record_interface.borrow_mut().start_record(
-                _area_capture.x,
-                _area_capture.y,
-                _area_capture.width,
-                _area_capture.height,
-            ) {
-                None => {
-                    // Do nothing if the start_record function return nothing
-                }
-                _ => {
-                    start_timer(record_time_label.clone());
-                    record_time_label.set_visible(true);
-                    if hide_switch.is_active() {
-                        _main_window.minimize();
+            let (x, y, width, height) = {
+                let _area_capture = area_capture.borrow();
+                (_area_capture.x, _area_capture.y, _area_capture.width, _area_capture.height)
+            };
+
+            let record_time_label_clone = record_time_label.clone();
+            let hide_switch_clone = hide_switch.clone();
+            let main_window_clone = _main_window.clone();
+            let play_button_clone = _play_button.clone();
+            let record_button_clone = _record_button.clone();
+            let stop_button_clone = _stop_button.clone();
+
+            Ffmpeg::start_record(
+                _ffmpeg_record_interface.clone(),
+                x,
+                y,
+                width,
+                height,
+                move || {
+                    start_timer(record_time_label_clone.clone());
+                    record_time_label_clone.set_visible(true);
+                    if hide_switch_clone.is_active() {
+                        main_window_clone.minimize();
                     }
-                    _play_button.hide();
-                    _record_button.hide();
-                    _stop_button.show();
+                    play_button_clone.hide();
+                    record_button_clone.hide();
+                    stop_button_clone.show();
                 }
-            }
+            );
         }
     });
 
@@ -541,13 +557,22 @@ pub fn build_ui(application: &Application) {
     let mut _ffmpeg_record_interface = ffmpeg_record_interface.clone();
     let _play_button = play_button.clone();
     let _stop_button = stop_button.clone();
+    let _record_button = record_button.clone();
     stop_button.connect_clicked(move |_| {
         _record_time_label.set_visible(false);
         stop_timer(_record_time_label.clone());
-        _ffmpeg_record_interface.borrow_mut().clone().stop_record();
-        record_button.show();
-        _stop_button.hide();
-        _play_button.show();
+        _stop_button.set_sensitive(false);
+
+        let record_button_clone = _record_button.clone();
+        let stop_button_clone = _stop_button.clone();
+        let play_button_clone = _play_button.clone();
+
+        Ffmpeg::stop_record(_ffmpeg_record_interface.clone(), move || {
+            record_button_clone.show();
+            stop_button_clone.hide();
+            stop_button_clone.set_sensitive(true);
+            play_button_clone.show();
+        });
     });
 
     // Delay Window Button
@@ -561,26 +586,32 @@ pub fn build_ui(application: &Application) {
     });
 
     // About Dialog
-    let mut about_icon_path = {
-        let mut current_exec_dir = std::env::current_exe().unwrap();
-        current_exec_dir.pop();
-        current_exec_dir
-    }
-    .join(Path::new("data/blue-recorder@x96.png"));
+    let data_dir_env = std::env::var("DATA_DIR").unwrap_or_else(|_| String::from("data/"));
+    let mut about_icon_path = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("data/blue-recorder@x96.png");
 
     if !about_icon_path.exists() {
-        about_icon_path = std::fs::canonicalize(Path::new(
-            &std::env::var("DATA_DIR")
-                .unwrap_or_else(|_| String::from("data/"))
-                .add("blue-recorder@x96.png"),
-        ))
-        .unwrap();
+        about_icon_path = std::fs::canonicalize(Path::new(&data_dir_env).join("blue-recorder@x96.png")).unwrap_or_else(|_| {
+            if Path::new("/usr/share/pixmaps/blue-recorder.svg").exists() {
+                std::path::PathBuf::from("/usr/share/pixmaps/blue-recorder.svg")
+            } else if Path::new("/usr/share/icons/hicolor/scalable/apps/sa.sy.bluerecorder.svg").exists() {
+                std::path::PathBuf::from("/usr/share/icons/hicolor/scalable/apps/sa.sy.bluerecorder.svg")
+            } else {
+                Path::new(&data_dir_env).join("blue-recorder@x96.png")
+            }
+        });
     }
 
-    let logo = Image::from_file(about_icon_path.to_str().unwrap());
+    if about_icon_path.exists() {
+        let logo = Image::from_file(about_icon_path.to_str().unwrap());
+        about_dialog.set_logo(logo.paintable().as_ref());
+    }
     about_dialog.set_transient_for(Some(&main_window));
     about_dialog.set_program_name(Some(&gettext("Blue Recorder")));
-    about_dialog.set_version(Some("0.2.0"));
+    about_dialog.set_version(Some("0.3.0"));
     about_dialog.set_copyright(Some("© 2021 Salem Yaslem"));
     about_dialog.set_wrap_license(true);
     about_dialog.set_license(Some("Blue Recorder is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nBlue Recorder is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\nSee the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with Blue Recorder. If not, see <http://www.gnu.org/licenses/>."));
@@ -594,6 +625,7 @@ pub fn build_ui(application: &Application) {
         "Suliman Altassan <suliman@dismail.de>",
         "O.Chibani <11yzyv86j@relay.firefox.com>",
         "Patreon Supporters: Ahmad Gharib, Medium,\nWilliam Grunow, Alex Benishek.",
+        "Jean Zamora <jeancarloscuatro1@gmail.com>",
     ]);
     about_dialog.set_artists(&[
         "Mustapha Assabar",
@@ -603,7 +635,6 @@ pub fn build_ui(application: &Application) {
     about_dialog.set_translator_credits(Some(&gettext("translator-credits")));
     about_dialog.set_website(Some("https://github.com/xlmnxp/blue-recorder/"));
     about_dialog.set_logo_icon_name(Some("blue-recorder"));
-    about_dialog.set_logo(logo.paintable().as_ref());
     about_dialog.set_modal(true);
 
     // Windows
@@ -615,11 +646,14 @@ pub fn build_ui(application: &Application) {
     });
 
     // Close the application when main window destroy
-    main_window.connect_destroy(move |main_window| {
-        let mut _ffmpeg_record_interface = ffmpeg_record_interface.clone();
-        // Stop recording before close the application
-        _ffmpeg_record_interface.borrow_mut().clone().stop_record();
-        main_window.close();
+    main_window.connect_close_request(move |main_window| {
+        main_window.hide(); // Hide immediately for better UX
+        let _ffmpeg_record_interface = ffmpeg_record_interface.clone();
+        // Stop recording asynchronously before closing the application
+        Ffmpeg::stop_record(_ffmpeg_record_interface, || {
+            std::process::exit(0);
+        });
+        gtk::Inhibit(true)
     });
 
     // Apply CSS

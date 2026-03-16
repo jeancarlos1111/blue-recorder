@@ -44,6 +44,23 @@ cp -a data interfaces po target/release
 then you will find the executable file at 
 `<Project Directory>/target/release/blue-recorder`
 
+## Build and Package Automation (build.sh)
+Alternatively, you can use the included `build.sh` script to automate everything, including binary compilation, translation generation, and packaging (`.deb`, `AppImage`, `Flatpak`).
+
+To build and package all formats at once:
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+You can also specify particular formats to build:
+```bash
+./build.sh --deb
+./build.sh --appimage
+./build.sh --flatpak
+```
+The compiled binary and generated packages will be placed into the `build_output/` directory.
+
 ## License
 ```
 GNU General Public License version 3

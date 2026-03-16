@@ -9,6 +9,7 @@ use zbus::{
 };
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum RecordTypes {
     Default,
     Monitor,
@@ -17,6 +18,7 @@ pub enum RecordTypes {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum CursorModeTypes {
     Default,
     Hidden,
