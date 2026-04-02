@@ -153,7 +153,7 @@ EOF
     chmod +x "$APPDIR/AppRun"
     
     # Build AppImage
-    ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "$BUILD_DIR/${APP_NAME}-${VERSION}-x86_64.AppImage"
+    APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool-x86_64.AppImage "$APPDIR" "$BUILD_DIR/${APP_NAME}-${VERSION}-x86_64.AppImage"
     echo "Created: $BUILD_DIR/${APP_NAME}-${VERSION}-x86_64.AppImage"
 fi
 

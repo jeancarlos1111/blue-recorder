@@ -73,9 +73,9 @@ blue-recorder/
 sudo apt install \
   build-essential clang pkg-config \
   libgtk-4-dev \
+  libgtk-3-dev \
   libgdk-pixbuf-2.0-dev \
   libglib2.0-dev \
-  libgio2.0-dev \
   gettext \
   ffmpeg \
   libgstreamer1.0-dev \
@@ -352,7 +352,17 @@ chmod +x build.sh
 
 Todos los artefactos generados (incluyendo las conversiones locales de la internacionalización y los paquetes finales) se guardarán organizadamente dentro del nuevo directorio `build_output/`.
 
----
+#### Construcción Universal con Docker (Recomendado para Releases)
+
+Construir en una máquina con una versión muy nueva de Linux puede hacer que el binario generado (y los AppImage) fallen en sistemas operativos ligeramente más antiguos dando errores como `version 'GLIBC_2.39' not found`. Para distribuir el software masivamente es recomendable compilar sobre un sistema con una librería libc antigua, como Ubuntu 22.04 LTS.
+
+Para ello, usa el script encapsulado mediante Docker:
+```bash
+chmod +x build-docker.sh
+
+# Se comporta igual que build.sh, pero todo corre aislado en Ubuntu 22.04
+./build-docker.sh --appimage --deb
+```
 
 ### Snap
 

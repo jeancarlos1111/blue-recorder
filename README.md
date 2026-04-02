@@ -61,6 +61,15 @@ You can also specify particular formats to build:
 ```
 The compiled binary and generated packages will be placed into the `build_output/` directory.
 
+### Universal Docker Builds (Recommended for Distribution)
+If you want to distribute the generated `.deb` and `AppImage` files to other users, it is highly recommended to compile them on an older Linux distribution to maximize backward compatibility (avoiding `version 'GLIBC_...' not found` errors).
+
+You can use the Docker helper script which builds everything inside an Ubuntu 22.04 container:
+```bash
+chmod +x build-docker.sh
+./build-docker.sh --appimage --deb
+```
+
 ## License
 ```
 GNU General Public License version 3
